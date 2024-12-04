@@ -21,6 +21,7 @@ public class WhackAMole {
 
     JButton currMoleTile;
     JButton currPlantTile;
+    JButton currPlantTile2;
 
     JButton resetButton = new JButton("Reset");
     JButton pauseButton = new JButton("Pause");
@@ -29,8 +30,10 @@ public class WhackAMole {
     Random random = new Random();
     Timer setMoleTimer;
     Timer setPlantTimer;
-    int score = 0;
+    Timer inactivityTimer;
 
+    int score = 0;
+    int highScore = 0;
     boolean isPaused = false;
 
     WhackAMole() {
@@ -43,7 +46,7 @@ public class WhackAMole {
         // Top panel for score display
         textLabel.setFont(new Font("Arial", Font.PLAIN, 27));
         textLabel.setHorizontalAlignment(JLabel.CENTER);
-        textLabel.setText("Score: 0");
+        textLabel.setText("Score: 0 | High Score: 0");
         textLabel.setOpaque(true);
 
         textPanel.setLayout(new BorderLayout());
@@ -80,18 +83,14 @@ public class WhackAMole {
                     JButton tile = (JButton) e.getSource();
                     if (tile == currMoleTile) {
                         score += 5;
-                        textLabel.setText("Score: " + score);
+                        updateScore();
+                        resetInactivityTimer();
                     } else if (tile == currPlantTile) {
                         score -= 3;
-                        textLabel.setText("Score: " + score);
+                        updateScore();
+                        resetInactivityTimer();
                         if (score <= 0) {
-                            score = 0;
-                            textLabel.setText("--- !!! GAME OVER !!! ---");
-                            setMoleTimer.stop();
-                            setPlantTimer.stop();
-                            for (JButton b : board) {
-                                b.setEnabled(false);
-                            }
+                            endGame("Game Over! Score reached zero.");
                         }
                     }
                 }
@@ -99,43 +98,67 @@ public class WhackAMole {
         }
 
         // Timers for mole and plant appearance
-        setMoleTimer = new Timer(700, new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                if (currMoleTile != null) {
-                    currMoleTile.setIcon(null);
-                    currMoleTile = null;
-                }
-
-                int num = random.nextInt(9);
-                JButton tile = board[num];
-
-                if (currPlantTile == tile) {
-                    return;
-                }
-
-                currMoleTile = tile;
-                currMoleTile.setIcon(moleIcon);
+        setMoleTimer = new Timer(700, e -> {
+            if (currMoleTile != null) {
+                currMoleTile.setIcon(null);
+                currMoleTile = null;
             }
+
+            int num = random.nextInt(9);
+            JButton tile = board[num];
+
+            if (currPlantTile == tile) {
+                return;
+            }
+
+            currMoleTile = tile;
+            currMoleTile.setIcon(moleIcon);
         });
 
-        setPlantTimer = new Timer(900, new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                if (currPlantTile != null) {
-                    currPlantTile.setIcon(null);
-                    currPlantTile = null;
-                }
+        setPlantTimer = new Timer(900, e -> {
+            // Clear the current plants
+            if (currPlantTile != null) {
+                currPlantTile.setIcon(null);
+                currPlantTile = null;
+            }
+            if (currPlantTile2 != null) {
+                currPlantTile2.setIcon(null);
+                currPlantTile2 = null;
+            }
 
-                int num = random.nextInt(9);
-                JButton tile = board[num];
+            // Select unique tiles for the two plants
+            int num1 = random.nextInt(9);
+            int num2;
 
-                if (currMoleTile == tile) {
-                    return;
-                }
+            do {
+                num2 = random.nextInt(9);
+            } while (num2 == num1); // Ensure the two tiles are different
 
-                currPlantTile = tile;
+            JButton tile1 = board[num1];
+            JButton tile2 = board[num2];
+
+            // Prevent overlapping with the mole
+            if (tile1 == currMoleTile) {
+                tile1 = null;
+            }
+            if (tile2 == currMoleTile || tile2 == tile1) {
+                tile2 = null;
+            }
+
+            // Assign the plant icons to the tiles
+            if (tile1 != null) {
+                currPlantTile = tile1;
                 currPlantTile.setIcon(plantIcon);
             }
+            if (tile2 != null) {
+                currPlantTile2 = tile2;
+                currPlantTile2.setIcon(plantIcon);
+            }
         });
+
+        // Inactivity timer to detect timeout
+        inactivityTimer = new Timer(15000, e -> endGame("Game Over! Timed out due to inactivity."));
+        inactivityTimer.setRepeats(false);
 
         // Reset button functionality
         resetButton.addActionListener(e -> resetGame());
@@ -143,30 +166,51 @@ public class WhackAMole {
         // Pause button functionality
         pauseButton.addActionListener(e -> {
             if (!isPaused) {
-                setMoleTimer.stop();
-                setPlantTimer.stop();
-                isPaused = true;
+                pauseGame();
             }
         });
 
         // Play button functionality
         playButton.addActionListener(e -> {
             if (isPaused) {
-                setMoleTimer.start();
-                setPlantTimer.start();
-                isPaused = false;
+                resumeGame();
             }
         });
 
         setMoleTimer.start();
         setPlantTimer.start();
+        resetInactivityTimer();
         frame.setVisible(true);
+    }
+
+    // Update score and check for new high score
+    private void updateScore() {
+        textLabel.setText("Score: " + score + " | High Score: " + highScore);
+        if (score > highScore) {
+            highScore = score;
+            textLabel.setText("Score: " + score + " | High Score: " + highScore);
+        }
+    }
+
+    // Reset inactivity timer
+    private void resetInactivityTimer() {
+        inactivityTimer.restart();
+    }
+
+    // End the game
+    private void endGame(String message) {
+        textLabel.setText(message + " | High Score: " + highScore);
+        setMoleTimer.stop();
+        setPlantTimer.stop();
+        inactivityTimer.stop();
+        for (JButton tile : board) {
+            tile.setEnabled(false);
+        }
     }
 
     // Reset game state
     private void resetGame() {
         score = 0;
-        textLabel.setText("Score: 0");
         currMoleTile = null;
         currPlantTile = null;
 
@@ -175,8 +219,26 @@ public class WhackAMole {
             tile.setIcon(null);
         }
 
+        textLabel.setText("Score: 0 | High Score: " + highScore);
         setMoleTimer.restart();
         setPlantTimer.restart();
+        resetInactivityTimer();
+        isPaused = false;
+    }
+
+    // Pause the game
+    private void pauseGame() {
+        setMoleTimer.stop();
+        setPlantTimer.stop();
+        inactivityTimer.stop();
+        isPaused = true;
+    }
+
+    // Resume the game
+    private void resumeGame() {
+        setMoleTimer.start();
+        setPlantTimer.start();
+        resetInactivityTimer();
         isPaused = false;
     }
 
